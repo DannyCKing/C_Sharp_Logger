@@ -1,68 +1,152 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Web;
-
-namespace MockServer.Utilities
-{
-    public class Logger
+internal class Logger
     {
-        private const string LOG_FILE_NAME = "log.txt";
+        private static readonly string FOLDER_NAME = "{APPLICATION_NAME}";
+
+        private static readonly string LOG_FOLDER_NAME = "Log";
+
+        public static string ApplicationDataFolder
+        {
+            get
+            {
+                string appDataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var appFolder = Path.Combine(appDataFolder, FOLDER_NAME);
+
+                // check if folder exists
+                if (!Directory.Exists(appFolder))
+                {
+                    Directory.CreateDirectory(appFolder);
+                }
+
+                var logFolder = Path.Combine(appDataFolder, FOLDER_NAME, LOG_FOLDER_NAME);
+
+                // check if folder exists
+                if (!Directory.Exists(logFolder))
+                {
+                    Directory.CreateDirectory(logFolder);
+                }
+
+                return appFolder;
+            }
+        }
+
+        public static string LogFolder
+        {
+            get
+            {
+                string appDataFolder = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                var appFolder = Path.Combine(appDataFolder, FOLDER_NAME);
+
+                // check if folder exists
+                if (!Directory.Exists(appFolder))
+                {
+                    Directory.CreateDirectory(appFolder);
+                }
+
+                var logFolder = Path.Combine(appDataFolder, FOLDER_NAME, LOG_FOLDER_NAME);
+
+                // check if folder exists
+                if (!Directory.Exists(logFolder))
+                {
+                    Directory.CreateDirectory(logFolder);
+                }
+
+                return logFolder;
+            }
+        }
+
+
+
+        private const string BASE_LOG_FILE_NAME = "log.txt";
 
         public static void Log(string message, Exception e = null)
         {
-            string originalLogMessage = "";
             try
             {
-                string folderPath = "APP_NAME";// put your app name here
+                string folderPath = LogFolder;
 
-                var pathToLogFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), folderPath);
+                var fileName = Path.Combine(folderPath, GetDateString() + BASE_LOG_FILE_NAME);
 
-                if(!Directory.Exists(pathToLogFile))
-                {
-                    Directory.CreateDirectory(pathToLogFile);
-                }
-                var fileName = Path.Combine(pathToLogFile, LOG_FILE_NAME);
-
-                originalLogMessage = GetLogMessage(message, e);
-                File.AppendAllText(fileName, originalLogMessage);
+                File.AppendAllText(fileName, GetLogMessage(message, e));
             }
             catch (Exception logException)
             {
                 // Unable to log to file
                 Console.WriteLine("Unable to log to file");
                 Console.WriteLine(GetLogMessage(message, e));
-
-                File.WriteAllText("local_output.txt", GetLogMessage("Unable to write to desired file", logException));
-                File.WriteAllText("local_output.txt", originalLogMessage);
             }
         }
 
-        private static string GetLogMessage(string message, Exception e = null)
+        private static string GetDateString()
+        {
+            var result = DateTime.Now.ToString("yyyy_MM_dd_");
+            return result;
+        }
+
+        private static string GetLogMessage(string message, Exception e)
         {
             string exceptionMessage = GetExceptionString(e);
-            string logMessageDate = DateTime.Now.ToLongDateString();
-            string logMessage = logMessageDate + " " + message + " " + exceptionMessage +  Environment.NewLine;
+            string logMessage = GetDateTimeString();
+            logMessage += " " + message + exceptionMessage + Environment.NewLine;
 
             return logMessage;
         }
 
+        /// <summary>
+        /// delete log files older the X days
+        /// </summary>
+        /// <param name="days">log files older than this will be deleted</param>
+        internal static void DeleteOldLogsFiles(int days)
+        {
+            try
+            {
+                string folderPath = LogFolder;
+
+                var files = Directory.GetFiles(folderPath);
+                for (int i = 0; i < files.Length; i++)
+                {
+                    FileInfo fi = new FileInfo(files[i]);
+                    int daysToDelete = 0 - days;
+                    if (fi.LastAccessTime < DateTime.Now.AddDays(daysToDelete))
+                    {
+                        fi.Delete();
+                    }
+                }
+                Log("Deleting files older than " + days + " days.");
+            }
+            catch (Exception logException)
+            {
+                // Unable to log to file
+                Log("Unable to delete files older than " + days + " days.");
+            }
+        }
+
+        private static string GetDateTimeString()
+        {
+            return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss:fff");
+        }
+
         private static string GetExceptionString(Exception error)
         {
-            if(error == null)
-            {
-                return "";
-            }
-            string errorString = "EXCEPTION: ";
+            string errorString = "";
             Exception currentError = error;
             while (currentError != null)
             {
                 errorString += currentError.Message + " ";
+
+                // Get stack trace for the exception with source file information
+                var st = new StackTrace(currentError, true);
+                // Get the top stack frame
+                var frame = st.GetFrame(0);
+                // Get the line number from the stack frame
+                var line = frame.GetFileLineNumber();
+
+                errorString += st;
+                errorString += frame;
+                errorString += line;
+
                 currentError = currentError.InnerException;
             }
 
             return errorString;
         }
     }
-}
